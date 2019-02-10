@@ -110,6 +110,15 @@ Q_SIGNALS:
 		int key,
 		Qt::KeyboardModifiers modifiers,
 		const QString &text);
+private:
+    BMessenger m_inputMethod;
+    bool m_inputMethodStarted;
+    int32 m_inputMethodLocationIndex;
+    void InputMethodStarted(BMessage *msg);
+    void InputMethodStopped();
+    void InputMethodChanged(BMessage *msg);
+    void InputMethodLocationRequest();
+    void InputMethodCommit();
 };
 
 class QHaikuWindow : public QObject, public QPlatformWindow
@@ -184,15 +193,6 @@ private Q_SLOTS:
 		int key,
 		Qt::KeyboardModifiers modifiers,
 		const QString &text);
-private:
-    BMessenger m_inputMethod;
-    bool m_inputMethodStarted;
-    int32 m_inputMethodLocationIndex;
-    void InputMethodStarted(BMessage *msg);
-    void InputMethodStopped();
-    void InputMethodChanged(BMessage *msg);
-    void InputMethodLocationRequest();
-    void InputMethodCommit();
 };
 
 QT_END_NAMESPACE

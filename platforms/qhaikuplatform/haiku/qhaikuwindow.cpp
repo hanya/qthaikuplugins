@@ -238,7 +238,7 @@ void QtHaikuWindow::MessageReceived(BMessage* msg)
 			}
 			break;
 		}
-		case INPUT_METHOD_COMMIT:
+		case kInputMethodCommit:
 		{
 			InputMethodCommit();
 			break;

@@ -99,7 +99,7 @@ public:
     
     QPlatformClipboard *clipboard() const;
 
-    QHaikuPlatformInputContext *inputContext() const;
+    QPlatformInputContext *inputContext() const;
 
     QPlatformDrag *drag() const;
     QPlatformServices *services() const;
