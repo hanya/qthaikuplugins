@@ -335,7 +335,7 @@ void QtHaikuWindow::InputMethodChanged(BMessage *msg)
             if (msg->FindInt32("be:clause_start", index, &clause_start) == B_OK &&
                 msg->FindInt32("be:clause_end", index, &clause_end) == B_OK) {
                 QTextCharFormat format;
-                if (isSelected && clause_start == countBeforeSelection) {
+                if (clause_start == selection_start) {
                     format.setBackground(QBrush(
                         QColor(kRedInputColor.red, kRedInputColor.green, kRedInputColor.blue,
                                kRedInputColor.alpha)));
@@ -347,9 +347,13 @@ void QtHaikuWindow::InputMethodChanged(BMessage *msg)
                 format.setForeground(QBrush(
                     QColor(kBlackColor.red, kBlackColor.green, kBlackColor.blue,
                            kBlackColor.alpha)));
+                int length = 0;
+                if (clause_start < clause_end) {
+                    length = UTF8CountChars(s + clause_start, clause_end - clause_start);
+                }
                 QInputMethodEvent::Attribute a(
-                    QInputMethodEvent::TextFormat, clause_start,
-                    clause_end - clause_start + 1, format);
+                    QInputMethodEvent::TextFormat, UTF8CountChars(s, clause_start),
+                    length, format);
                 attrs << a;
             } else {
                 break;
@@ -365,14 +369,18 @@ void QtHaikuWindow::InputMethodChanged(BMessage *msg)
             preeditString = QString::fromUtf8(s);
             if (isSelected) {
                 // place cursor at the start of the currently under conversion
+                int length = 0;
+                if (selection_start < selection_end) {
+                    length = UTF8CountChars(s + selection_start, selection_end - selection_start);
+                }
                 QInputMethodEvent::Attribute a(
                     QInputMethodEvent::Cursor,
-                    static_cast<int32>(countBeforeSelection), CURSOR_VISIBLE, 0);
+                    static_cast<int32>(countBeforeSelection), length, CURSOR_VISIBLE);
                 attrs << a;
             } else {
                 // place cursor at the start of the range
                 QInputMethodEvent::Attribute a(
-                    QInputMethodEvent::Cursor, 0, CURSOR_VISIBLE, 0);
+                    QInputMethodEvent::Cursor, 0, 0, CURSOR_VISIBLE);
                 attrs << a;
             }
         }
@@ -393,24 +401,27 @@ void QtHaikuWindow::InputMethodLocationRequest()
         if (!widget) {
             return;
         }
-        QRect rect = widget->inputMethodQuery(Qt::ImCursorRectangle).toRect();
+        QVariant v = widget->inputMethodQuery(Qt::ImCursorRectangle);
+        if (!v.isValid()) {
+            v = widget->inputMethodQuery(Qt::ImMicroFocus); // old style
+        }
+        QRect rect = v.toRect();
         QPoint point = widget->mapToGlobal(rect.topLeft());
-        int height = rect.height();
+        float height = static_cast<float>(rect.height());
         QMargins margins = fQWindow->frameMargins();
-        const BPoint p(point.x() + margins.left() + 1,
+        const BPoint p(point.x() + margins.left(),
                        point.y() - 1);
 
         BMessage message(B_INPUT_METHOD_EVENT);
         message.AddInt32("be:opcode", B_INPUT_METHOD_LOCATION_REQUEST);
         // to match with the cursor position, add dummy entries
-        BPoint dummy(0, 0);
         for (int32 i = 0; i < m_inputMethodLocationIndex; ++i) {
-            message.AddPoint("be:location_reply", dummy);
-            message.AddFloat("be:height_reply", 0.0f);
+            message.AddPoint("be:location_reply", p);
+            message.AddFloat("be:height_reply", height);
         }
         // add real position
         message.AddPoint("be:location_reply", p);
-        message.AddFloat("be:height_reply", static_cast<float>(height));
+        message.AddFloat("be:height_reply", height);
         m_inputMethod.SendMessage(&message);
     }
 }
