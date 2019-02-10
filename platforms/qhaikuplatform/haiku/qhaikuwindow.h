@@ -48,6 +48,7 @@
 #include <Rect.h>
 #include <View.h>
 #include <Entry.h>
+#include <Messenger.h>
 #include <Path.h>
 #include <Screen.h>
 #include <Deskbar.h>
@@ -63,6 +64,7 @@
 #define kQuitApplication	'QAPP'
 #define kSizeGripEnable		'SGEN'
 #define kSizeGripDisable	'SGDI'
+#define kInputMethodCommit	'IMCT'
 
 QT_BEGIN_NAMESPACE
 
@@ -182,6 +184,15 @@ private Q_SLOTS:
 		int key,
 		Qt::KeyboardModifiers modifiers,
 		const QString &text);
+private:
+    BMessenger m_inputMethod;
+    bool m_inputMethodStarted;
+    int32 m_inputMethodLocationIndex;
+    void InputMethodStarted(BMessage *msg);
+    void InputMethodStopped();
+    void InputMethodChanged(BMessage *msg);
+    void InputMethodLocationRequest();
+    void InputMethodCommit();
 };
 
 QT_END_NAMESPACE

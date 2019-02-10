@@ -59,6 +59,7 @@ QT_BEGIN_NAMESPACE
 
 class QSimpleDrag;
 class QHaikuBackendData;
+class QHaikuPlatformInputContext;
 class QHaikuSystemLocale;
 
 #if !defined(QT_NO_OPENGL)
@@ -98,6 +99,8 @@ public:
     
     QPlatformClipboard *clipboard() const;
 
+    QHaikuPlatformInputContext *inputContext() const;
+
     QPlatformDrag *drag() const;
     QPlatformServices *services() const;
 
@@ -111,6 +114,7 @@ public:
 
 private:
     QScopedPointer<QPlatformFontDatabase> m_fontDatabase;
+    QScopedPointer<QHaikuPlatformInputContext> m_inputContext;
 
     QSimpleDrag *m_drag;
     QPlatformServices *m_services;

@@ -57,12 +57,20 @@
 
 #include <QMimeData>
 #include <QDragMoveEvent>
+#include <QTextCharFormat>
 
 #include <private/qwindow_p.h>
 
 #include <qdebug.h>
 
+#include <Input.h>
+#include <utf8_functions.h>
+
 QT_BEGIN_NAMESPACE
+
+static const rgb_color kBlackColor = { 0, 0, 0, 255 };
+static const rgb_color kBlueInputColor = { 152, 203, 255, 255 };
+static const rgb_color kRedInputColor = { 255, 152, 152, 255 };
 
 static uint32 translateKeyCode(uint32 key)
 {
@@ -107,6 +115,8 @@ QtHaikuWindow::QtHaikuWindow(QHaikuWindow *qwindow,
 		uint32 flags)
 		: QObject()
 		, BWindow(frame, title, look, feel, flags)
+		, m_inputMethodStarted(false)
+		, m_inputMethodLocationIndex(0)
 {
 	fQWindow = qwindow;
 	fView = new QHaikuSurfaceView(Bounds());
@@ -203,6 +213,36 @@ void QtHaikuWindow::MessageReceived(BMessage* msg)
 					-shift_x * 120, Qt::Horizontal, fView->hostToQtModifiers(modifiers()));
 			 break;
 		}
+		case B_INPUT_METHOD_EVENT:
+		{
+			int32 opcode = 0;
+			if (msg->FindInt32("be:opcode", &opcode) == B_OK) {
+				switch(opcode) {
+					case B_INPUT_METHOD_STARTED:
+						InputMethodStarted(msg);
+						break;
+					case B_INPUT_METHOD_STOPPED:
+						InputMethodStopped();
+						break;
+					case B_INPUT_METHOD_CHANGED:
+						if (m_inputMethodStarted) {
+							InputMethodChanged(msg);
+						}
+						break;
+					case B_INPUT_METHOD_LOCATION_REQUEST:
+						if (m_inputMethodStarted) {
+							InputMethodLocationRequest();
+						}
+						break;
+				}
+			}
+			break;
+		}
+		case INPUT_METHOD_COMMIT:
+		{
+			InputMethodCommit();
+			break;
+		}
 	default:
 		BWindow::MessageReceived(msg);
 		break;
@@ -242,6 +282,150 @@ bool QtHaikuWindow::QuitRequested()
 	Q_EMIT quitRequested();
     return false;
 }
+
+
+void QtHaikuWindow::InputMethodStarted(BMessage *msg)
+{
+    BMessenger messenger;
+    if (msg->FindMessenger("be:reply_to", &messenger) == B_OK) {
+        m_inputMethod = messenger;
+        m_inputMethodStarted = true;
+    }
+}
+
+
+void QtHaikuWindow::InputMethodStopped()
+{
+    m_inputMethod = BMessenger();
+    m_inputMethodStarted = false;
+    m_inputMethodLocationIndex = 0;
+}
+
+
+void QtHaikuWindow::InputMethodChanged(BMessage *msg)
+{
+    const int32 CURSOR_VISIBLE = 1;
+
+    if (!qApp->focusObject()) {
+        return;
+    }
+    const char* s = NULL;
+    const bool confirmed = msg->GetBool("be:confirmed", false);
+    if (msg->FindString("be:string", &s) == B_OK) {
+        // empty string is used to make preedit empty but null string is invalid
+        if (s == NULL) {
+            return;
+        }
+
+        int32 selection_start = 0;
+        int32 selection_end = 0;
+        const bool isSelected =
+                (msg->FindInt32("be:selection", 0, &selection_start) == B_OK &&
+                 msg->FindInt32("be:selection", 1, &selection_end) == B_OK);
+        // count number of characters from start of text and start of selection
+        const uint32 countBeforeSelection = UTF8CountChars(s, selection_start);
+        // place cursor at the current conversion context
+        m_inputMethodLocationIndex = countBeforeSelection;
+
+        QList<QInputMethodEvent::Attribute> attrs;
+        int32 index = 0;
+        while (true) {
+            int32 clause_start = 0;
+            int32 clause_end = 0;
+            if (msg->FindInt32("be:clause_start", index, &clause_start) == B_OK &&
+                msg->FindInt32("be:clause_end", index, &clause_end) == B_OK) {
+                QTextCharFormat format;
+                if (isSelected && clause_start == countBeforeSelection) {
+                    format.setBackground(QBrush(
+                        QColor(kRedInputColor.red, kRedInputColor.green, kRedInputColor.blue,
+                               kRedInputColor.alpha)));
+                } else {
+                    format.setBackground(QBrush(
+                        QColor(kBlueInputColor.red, kBlueInputColor.green, kBlueInputColor.blue,
+                               kBlueInputColor.alpha)));
+                }
+                format.setForeground(QBrush(
+                    QColor(kBlackColor.red, kBlackColor.green, kBlackColor.blue,
+                           kBlackColor.alpha)));
+                QInputMethodEvent::Attribute a(
+                    QInputMethodEvent::TextFormat, clause_start,
+                    clause_end - clause_start + 1, format);
+                attrs << a;
+            } else {
+                break;
+            }
+            index += 1;
+        }
+
+        QString commitString;
+        QString preeditString;
+        if (confirmed) {
+            commitString = QString::fromUtf8(s);
+        } else {
+            preeditString = QString::fromUtf8(s);
+            if (isSelected) {
+                // place cursor at the start of the currently under conversion
+                QInputMethodEvent::Attribute a(
+                    QInputMethodEvent::Cursor,
+                    static_cast<int32>(countBeforeSelection), CURSOR_VISIBLE, 0);
+                attrs << a;
+            } else {
+                // place cursor at the start of the range
+                QInputMethodEvent::Attribute a(
+                    QInputMethodEvent::Cursor, 0, CURSOR_VISIBLE, 0);
+                attrs << a;
+            }
+        }
+
+        QInputMethodEvent event(preeditString, attrs);
+        if (confirmed) {
+            event.setCommitString(commitString);
+        }
+        QCoreApplication::sendEvent(qApp->focusObject(), &event);
+    }
+}
+
+
+void QtHaikuWindow::InputMethodLocationRequest()
+{
+    if (m_inputMethod.IsValid()) {
+        QWidget *widget = QApplication::focusWidget();
+        if (!widget) {
+            return;
+        }
+        QRect rect = widget->inputMethodQuery(Qt::ImCursorRectangle).toRect();
+        QPoint point = widget->mapToGlobal(rect.topLeft());
+        int height = rect.height();
+        QMargins margins = fQWindow->frameMargins();
+        const BPoint p(point.x() + margins.left() + 1,
+                       point.y() - 1);
+
+        BMessage message(B_INPUT_METHOD_EVENT);
+        message.AddInt32("be:opcode", B_INPUT_METHOD_LOCATION_REQUEST);
+        // to match with the cursor position, add dummy entries
+        BPoint dummy(0, 0);
+        for (int32 i = 0; i < m_inputMethodLocationIndex; ++i) {
+            message.AddPoint("be:location_reply", dummy);
+            message.AddFloat("be:height_reply", 0.0f);
+        }
+        // add real position
+        message.AddPoint("be:location_reply", p);
+        message.AddFloat("be:height_reply", static_cast<float>(height));
+        m_inputMethod.SendMessage(&message);
+    }
+}
+
+void QtHaikuWindow::InputMethodCommit()
+{
+    if (m_inputMethod.IsValid()) {
+        // todo, how to obtain current preedit text?
+        // keep last preedit text to commit with it?
+        BMessage message(B_INPUT_METHOD_EVENT);
+        message.AddInt32("be:opcode", B_INPUT_METHOD_STOPPED);
+        m_inputMethod.SendMessage(&message);
+    }
+}
+
 
 QHaikuWindow::QHaikuWindow(QWindow *wnd)
     : QPlatformWindow(wnd)

@@ -58,6 +58,7 @@
 #include "qhaikuclipboard.h"
 #include "qhaikuservices.h"
 #include "qhaikuplatformfontdatabase.h"
+#include "qhaikuplatforminputcontext.h"
 #include "qhaikusystemlocale.h"
 
 #if !defined(QT_NO_OPENGL)
@@ -75,6 +76,7 @@ QHaikuIntegration::QHaikuIntegration(const QStringList &parameters, int &argc, c
     , m_screen(new QHaikuScreen)
 {
     m_fontDatabase.reset(new QHaikuPlatformFontDatabase());
+    m_inputContext.reset(new QHaikuPlatformInputContext());
     screenAdded(m_screen);
 }
 
@@ -158,6 +160,11 @@ QPlatformDrag *QHaikuIntegration::drag() const
 QPlatformClipboard *QHaikuIntegration::clipboard() const
 {
     return m_clipboard;
+}
+
+QPlatformInputContext *QHaikuIntegration::inputContext() const
+{
+    return m_inputContext.data();
 }
 
 QPlatformServices *QHaikuIntegration::services() const

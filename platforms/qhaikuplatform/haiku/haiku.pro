@@ -15,6 +15,10 @@ PKGCONFIG += freetype2
 
 QMAKE_USE_PRIVATE += freetype
 
+SYSTEM_INCLUDE = $$system(finddir B_SYSTEM_HEADERS_DIRECTORY)
+INCLUDEPATH =  $${SYSTEM_INCLUDE}/private/input \
+               $${SYSTEM_INCLUDE}/private/interface
+
 SOURCES =   main.cpp \
             qhaikuintegration.cpp \
             qhaikuintegration_haiku.cpp \
@@ -29,6 +33,7 @@ SOURCES =   main.cpp \
             qhaikunativeiconmenuitem.cpp \
             qhaikuplatformfontdatabase.cpp \
             qhaikuplatformdialoghelpers.cpp \
+            qhaikuplatforminputcontext.cpp \
             qhaikusystemlocale.cpp \
             qhaikuview.cpp \
             qhaikuservices.cpp \
@@ -46,6 +51,7 @@ HEADERS =   qhaikuintegration.h \
             qhaikunativeiconmenuitem.h \
             qhaikuplatformfontdatabase.h \
             qhaikuplatformdialoghelpers.h \
+            qhaikuplatforminputcontext.h \
             qhaikusystemlocale.h \
             qhaikuview.h \
             qhaikuservices.h \
